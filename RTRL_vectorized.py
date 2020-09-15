@@ -1,0 +1,98 @@
+'''
+RTRL for Bus Driver Problem
+
+### Detect the first 'b' after 'a' in a sequence (4 possible characters including 'a b c d')
+
+Vectorized form (hidden_dim: 2, time cost: around 0.3 s)
+
+Time cost: 0.33709168434143066
+Test:1000/1000
+'''
+
+import numpy as np
+from scipy.linalg import block_diag
+import time
+import matplotlib.pyplot as plt
+
+f = lambda x: 1 / (1+np.exp(-x))
+delta = lambda i, j: i==j
+
+dim_hidden = 2
+dim_input = 4
+
+W = -1 + 2 * np.random.rand(dim_hidden, (dim_hidden + dim_input + 1))
+P =  np.zeros((dim_hidden, dim_hidden * (dim_hidden + dim_input + 1)))
+
+preInd = -1
+alpha = 5
+maxIter = 3000
+y = np.zeros((dim_hidden, 1))
+err_arr = []
+time_begin = time.time()
+for t in range(maxIter):
+    x = np.zeros((dim_input,1))
+    currInd = np.random.randint(4)  # 0:a, 1:b, 2:c, 3:d
+    if t == 0:
+        currInd = 0
+    x[currInd] = 1
+    if preInd == 0 and currInd == 1:  # previously seen a, currently see b
+        d = 1  # target output 1
+        preInd = -1  # reset preInd
+    else:
+        d = 0  # target output 0
+        preInd = -1  # reset preInd
+        if currInd == 0:  # record a:0
+            preInd = currInd
+
+    bias = np.ones((1, 1))
+    z = np.concatenate([y, x, bias], axis=0)
+    
+    s = W.dot(z)
+    y = f(s)
+    
+    P = f(s) * (1-f(s)) * (np.dot(W[:, 0:dim_hidden], P) + block_diag(*[z.squeeze().tolist() for _ in range(dim_hidden)]))
+
+    err = d - y[-1] # Using the output of last unit in the loss
+    W = W + alpha * err * P[-1,:].reshape(W.shape)
+    err_arr.append(abs(err))
+plt.plot(err_arr)
+
+print("Time cost:", time.time()-time_begin)
+# Test
+x = np.zeros((dim_input,1))
+currInd = 0
+x[currInd] = 1
+preInd = currInd
+
+y = np.zeros((dim_hidden,1))
+bias = np.ones((1, 1))
+z = np.concatenate([y, x, bias], axis=0)
+s = W.dot(z)
+y = f(s);
+passed = 0
+abN = 0
+
+test_len = 1000
+for t in range(test_len):
+    x = np.zeros((dim_input,1))
+    currInd = np.random.randint(4)  # 0:a, 1:b, 2:c, 3:d
+    x[currInd] = 1
+    if currInd == 1 and preInd == 0:  # previously seen a, currently see b
+        abN += 1  # target output 1
+        d = 1
+        preInd = -1  # reset preInd
+    else:
+        d = 0  # target output 0
+        preInd = -1  # reset preInd
+        if currInd == 0:  # record a:0
+            preInd = currInd
+    
+    bias = np.ones((1, 1))
+    z = np.concatenate([y, x, bias], axis=0)
+    
+    s = W.dot(z)
+    y = f(s)
+    if (y[-1][0]>=0.5) == d: # using output of last unit
+        passed += 1
+        
+print("Test:{}/{}".format(passed, test_len))
